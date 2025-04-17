@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Travel Itinerary Planner - PoC</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@17/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const destinations = [
+      {
+        name: "Paris",
+        interests: ["Art", "History", "Food", "City Sightseeing", "Shopping"],
+        budgetRange: [1000, 3000],
+        days: [3, 7],
+        activities: [
+          { name: "Louvre Museum", type: "Art", cost: 20 },
+          { name: "Eiffel Tower", type: "History", cost: 15 },
+          { name: "Seine River Cruise", type: "Food", cost: 50 }
+        ],
+        hotels: [
+          { name: "Hotel Paris", price: 150 },
+          { name: "Luxury Inn", price: 300 }
+        ],
+        flights: [
+          { airline: "Air France", price: 500 },
+          { airline: "EasyJet", price: 200 }
+        ],
+        aiScoreFactors: { culture: 0.8, relaxation: 0.4, adventure: 0.3 },
+        image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80"
+      },
+      {
+        name: "Bali",
+        interests: ["Beaches", "Adventure", "Culture", "Nightlife"],
+        budgetRange: [800, 2500],
+        days: [5, 10],
+        activities: [
+          { name: "Uluwatu Temple", type: "Culture", cost: 10 },
+          { name: "Rice Terraces", type: "Adventure", cost: 25 },
+          { name: "Snorkeling", type: "Beaches", cost: 40 }
+        ],
+        hotels: [
+          { name: "Bali Resort", price: 100 },
+          { name: "Beach Villa", price: 250 }
+        ],
+        flights: [
+          { airline: "Garuda", price: 400 },
+          { airline: "AirAsia", price: 150 }
+        ],
+        aiScoreFactors: { culture: 0.7, relaxation: 0.9, adventure: 0.6 },
+        image: "https://images.unsplash.com/photo-1539367628448-4e08d2ce4f4b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80"
+      },
+      {
+        name: "Tokyo",
+        interests: ["Culture", "Food", "Adventure", "City Sightseeing", "Nightlife", "Shopping"],
+        budgetRange: [1200, 3500],
+        days: [4, 9],
+        activities: [
+          { name: "Shibuya Crossing", type: "Culture", cost: 0 },
+          { name: "Sushi Making Class", type: "Food", cost: 80 },
+          { name: "Mount Fuji Day Trip", type: "Adventure", cost: 100 }
+        ],
+        hotels: [
+          { name: "Tokyo Inn", price: 120 },
+          { name: "Grand Hotel", price: 280 }
+        ],
+        flights: [
+          { airline: "ANA", price: 550 },
+          { airline: "Japan Airlines", price: 300 }
+        ],
+        aiScoreFactors: { culture: 0.9, relaxation: 0.5, adventure: 0.7 },
+        image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80"
+      }
+    ];
+
+    const TravelForm = () => {
+      const [numPeople, setNumPeople] = useState("1 Person");
+      const [companions, setCompanions] = useState("Solo");
+      const [purpose, setPurpose] = useState("Vacation");
+      const [interests, setInterests] = useState(["Beaches", "Culture"]);
+      const [budgetLevel, setBudgetLevel] = useState("Medium");
+      const [days, setDays] = useState(5);
+      const [isLoading, setIsLoading] = useState(false);
+      const [error, setError] = useState("");
+      const [topDestination, setTopDestination] = useState(null);
+
+      const interestOptions = ["Beaches", "Adventure", "Nightlife", "Shopping", "City Sightseeing"];
+
+      const toggleInterest = (i) => {
+        setInterests((prev) =>
+          prev.includes(i) ? prev.filter((p) => p !== i) : [...prev, i]
+        );
+      };
+
+      const validate = () => {
+        const budget = budgetLevel === "Low" ? 1000 : budgetLevel === "Medium" ? 2000 : 3500;
+        if (!budget || budget < 500 || budget > 5000) {
+          setError("Budget must be between $500 and $5000.");
+          return false;
+        }
+        if (!days || days < 1 || days > 30) {
+          setError("Days must be between 1 and 30.");
+          return false;
+        }
+        if (!interests.length) {
+          setError("Select at least one interest.");
+          return false;
+        }
+        return true;
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!validate()) return;
+
+        setError("");
+        setIsLoading(true);
+        await new Promise((res) => setTimeout(res, 500));
+
+        const budget = budgetLevel === "Low" ? 1000 : budgetLevel === "Medium" ? 2000 : 3500;
+        const prefs = {
+          budget: Number(budget),
+          interests,
+          days: Number(days)
+        };
+
+        const scores = destinations
+          .map((dest) => {
+            let score = 0;
+            interests.forEach((i) => {
+              if (dest.interests.includes(i)) score += 1;
+            });
+            score -= Math.abs(days - ((dest.days[0] + dest.days[1]) / 2));
+            score -= Math.abs(budget - ((dest.budgetRange[0] + dest.budgetRange[1]) / 2)) / 100;
+            return { ...dest, score };
+          })
+          .sort((a, b) => b.score - a.score);
+
+        setTopDestination(scores[0]);
+        setIsLoading(false);
+      };
+
+      return (
+        <div className="min-h-screen bg-gradient-to-b from-blue-100 to-gray-100">
+          {/* Hero Banner */}
+          <div
+            className="relative bg-cover bg-center h-80 flex items-center justify-center"
+            style={{
+              backgroundImage: `url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80')`
+            }}
+          >
+            <div className="absolute inset-0 bg-black opacity-50"></div>
+            <div className="relative text-center text-white">
+              <h1 className="text-4xl font-bold mb-2">AI Travel Itinerary Planner</h1>
+              <p className="text-lg">Your personalized adventure awaits!</p>
+            </div>
+          </div>
+
+          {/* Form Section */}
+          <div className="max-w-3xl mx-auto mt-10 p-6">
+            <div className="bg-white rounded shadow p-8 relative">
+              <form onSubmit={handleSubmit}>
+                {error && <p className="text-red-500 mb-3">{error}</p>}
+
+                {/* How many people are travelling? */}
+                <label className="block mb-2 font-semibold">How many people are travelling?</label>
+                <div className="mb-6">
+                  <select
+                    value={numPeople}
+                    onChange={(e) => setNumPeople(e.target.value)}
+                    className="w-full p-2 border rounded"
+                  >
+                    <option>1 Person</option>
+                    <option>2 Persons</option>
+                    <option>3 Persons</option>
+                    <option>4+ Persons</option>
+                  </select>
+                </div>
+
+                {/* Who do you plan on travelling with? */}
+                <label className="block mb-2 font-semibold">Who do you plan on travelling with?</label>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {["Solo", "Family", "Friends", "Couple"].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setCompanions(option)}
+                      className={`px-4 py-2 rounded-lg border ${
+                        companions === option
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                    >
+                      <i className={`fas fa-${option.toLowerCase() === "solo" ? "user" : option.toLowerCase() === "family" ? "users" : option.toLowerCase() === "friends" ? "users" : "heart"} mr-2`}></i>
+                      {option}
+                    </button>
+                  ))}
+                </div>
+
+                {/* What's the purpose of travelling? */}
+                <label className="block mb-2 font-semibold">What's the purpose of travelling?</label>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {["Vacation", "Event / Festival", "Professional Work"].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setPurpose(option)}
+                      className={`px-4 py-2 rounded-lg border ${
+                        purpose === option
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                    >
+                      <i className={`fas fa-${option.toLowerCase().includes("vacation") ? "umbrella-beach" : option.toLowerCase().includes("event") ? "calendar" : "briefcase"} mr-2`}></i>
+                      {option}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Which activities are you interested in? */}
+                <label className="block mb-2 font-semibold">
+                  Which activities are you interested in? <br />
+                  <span className="text-sm font-normal">You can select multiple activities.</span>
+                </label>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {interestOptions.map((i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleInterest(i)}
+                      className={`px-4 py-2 rounded-lg border ${
+                        interests.includes(i)
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                    >
+                      <i className={`fas fa-${i.toLowerCase() === "beaches" ? "umbrella-beach" : i.toLowerCase() === "adventure" ? "mountain" : i.toLowerCase() === "nightlife" ? "cocktail" : i.toLowerCase() === "shopping" ? "shopping-bag" : "city"} mr-2`}></i>
+                      {i}
+                    </button>
+                  ))}
+                </div>
+
+                {/* What's your budget for travelling? */}
+                <label className="block mb-2 font-semibold">What's your budget for travelling?</label>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {["Low", "Medium", "High"].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setBudgetLevel(option)}
+                      className={`px-4 py-2 rounded-lg border ${
+                        budgetLevel === option
+                          ? "bg-orange-500 text-white border-orange-500"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                    >
+                      <i className="fas fa-dollar-sign mr-2"></i>
+                      {option}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Number of Days (kept from original logic) */}
+                <label className="block mb-2 font-semibold">Number of Days</label>
+                <div className="flex items-center mb-4">
+                  <i className="fas fa-calendar-alt text-gray-400 mr-2"></i>
+                  <input
+                    type="number"
+                    value={days}
+                    onChange={(e) => setDays(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="1 - 30"
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  disabled={isLoading}
+                  type="submit"
+                  className="w-full bg-pink-500 text-white p-3 rounded hover:bg-pink-600"
+                >
+                  {isLoading ? "Finding Best Match..." : "Create"}
+                </button>
+              </form>
+
+              {topDestination && (
+                <div className="mt-8">
+                  <h2 className="text-xl font-semibold mb-2">
+                    Top Destination Match: {topDestination.name}
+                  </h2>
+                  <img
+                    src={topDestination.image}
+                    alt={topDestination.name}
+                    className="w-full h-64 object-cover rounded mb-4"
+                  />
+                  <p className="text-gray-700">
+                    Budget Range: ${topDestination.budgetRange[0]} - ${topDestination.budgetRange[1]}
+                  </p>
+                  <p className="text-gray-700">
+                    Ideal Days: {topDestination.days[0]} - {topDestination.days[1]}
+                  </p>
+                  <p className="text-gray-700">Popular Activities:</p>
+                  <ul className="list-disc list-inside">
+                    {topDestination.activities.map((a, idx) => (
+                      <li key={idx}>
+                        {a.name} (${a.cost})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <footer
+            className="bg-cover bg-center py-6 mt-12 text-white"
+            style={{
+              backgroundImage: `url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80')`
+            }}
+          >
+            <div className="max-w-4xl mx-auto text-center">
+              <p className="mb-4">© 2025 AI Travel Planner. All rights reserved.</p>
+              <div className="flex justify-center space-x-4">
+                <a href="#" className="text-white hover:text-blue-300">
+                  <i className="fab fa-facebook-f"></i>
+                </a>
+                <a href="#" className="text-white hover:text-blue-300">
+                  <i className="fab fa-twitter"></i>
+                </a>
+                <a href="#" className="text-white hover:text-blue-300">
+                  <i className="fab fa-instagram"></i>
+                </a>
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<TravelForm />, document.getElementById("root"));
+  </script>
+</body>
+</html>
